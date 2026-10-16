@@ -1,0 +1,27 @@
+//@version=5
+// Golden cross 50/200, long only, no SL/TP. Run on COMEX:GC1! (or MGC1!), 1h.
+// Fees: set commission in the inputs to match the CoinQuant schedule.
+strategy("Golden Cross 50/200 Long", overlay=true,
+     initial_capital=10000, currency=currency.USD,
+     default_qty_type=strategy.fixed, default_qty_value=1,
+     commission_type=strategy.commission.cash_per_contract, commission_value=1.0,
+     slippage=1, process_orders_on_close=false, pyramiding=0)
+
+fastLen = input.int(50,  "Fast SMA")
+slowLen = input.int(200, "Slow SMA")
+startT  = input.time(timestamp("2023-10-01T00:00:00"), "Start")
+endT    = input.time(timestamp("2026-10-01T00:00:00"), "End")
+
+fast = ta.sma(close, fastLen)
+slow = ta.sma(close, slowLen)
+inWindow = time >= startT and time < endT
+
+if inWindow and ta.crossover(fast, slow)
+    strategy.entry("Long", strategy.long)
+if ta.crossunder(fast, slow)
+    strategy.close("Long")
+if time >= endT
+    strategy.close_all()
+
+plot(fast, "SMA 50",  color=color.orange)
+plot(slow, "SMA 200", color=color.blue)
