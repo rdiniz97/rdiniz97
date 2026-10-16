@@ -29,3 +29,13 @@ Saída em `results/`: `summary.json`, `trades.csv`, `equity.csv`, `equity.png`.
 
 ## TradingView / Vela
 `golden_cross.pine` (Pine v5) roda a mesma estratégia direto no gráfico `COMEX:GC1!` (ou `MGC1!`) 1h, com comissão por contrato configurável.
+
+## Usando a base de ticks do ATAS (Drive "Journal Trading/ticks_MES")
+```bash
+# arquivos ticks_MES_1s_preco_AAAA-MM-DD.csv.gz baixados do Drive
+python ticks_to_hourly.py data/mes_1h.csv /caminho/ticks_MES_1s_preco_*.csv.gz
+python backtest.py data/mes_1h.csv --start 2025-11-03 --end 2026-10-13 \
+    --multiplier 5 --tick-size 0.25          # 1 MES: US$ 5/ponto, tick 0,25
+```
+`ticks_to_hourly.py` aceita os dois formatos do export (`_preco_` = preço por segundo; sem `_preco_` = OHLC de 1 s)
+e pode ser rodado várias vezes: acumula no mesmo CSV e remove duplicados.

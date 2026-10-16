@@ -54,7 +54,7 @@ def load_csv(path: str | Path) -> pd.DataFrame:
     df.columns = [c.strip().lower() for c in df.columns]
     tcol = next(c for c in ("time", "datetime", "date", "timestamp") if c in df.columns)
     t = df[tcol]
-    if np.issubdtype(t.dtype, np.number):
+    if pd.api.types.is_numeric_dtype(t):
         unit = "ms" if t.abs().max() > 1e11 else "s"
         idx = pd.to_datetime(t, unit=unit, utc=True)
     else:
@@ -149,7 +149,10 @@ def stats(eq: pd.Series, tr: pd.DataFrame, df: pd.DataFrame, cfg: Config) -> dic
     years = (eq.index[-1] - eq.index[0]).total_seconds() / (365.25 * 86400)
     dd = eq / eq.cummax() - 1
     daily = eq.resample("1D").last().dropna().pct_change().dropna()
-    bh = df["close"].iloc[-1] / df["open"].iloc[0] - 1
+    # Buy & hold with the same sizing as the strategy (fixed contracts or 100% equity).
+    open0 = df["open"].iloc[0]
+    bh_qty = cfg.contracts if cfg.sizing == "fixed" else init / (open0 * cfg.multiplier)
+    bh = bh_qty * (df["close"].iloc[-1] - open0) * cfg.multiplier / init
     s = {
         "start": str(eq.index[0]), "end": str(eq.index[-1]), "bars": len(eq),
         "initial_capital": init, "final_equity": round(float(eq.iloc[-1]), 2),
@@ -186,12 +189,14 @@ def main():
     ap.add_argument("--contracts", type=float, default=1, help="contracts for fixed sizing")
     ap.add_argument("--commission", type=float, default=1.00, help="USD per contract per side")
     ap.add_argument("--slippage-ticks", type=float, default=1.0)
+    ap.add_argument("--tick-size", type=float, default=0.10, help="0.10=GC/MGC, 0.25=MES/MNQ")
     ap.add_argument("--out", default="results")
     a = ap.parse_args()
 
     cfg = Config(initial_capital=a.capital, multiplier=a.multiplier,
                  sizing=a.sizing, contracts=a.contracts,
-                 fees=Fees(commission_per_contract=a.commission, slippage_ticks=a.slippage_ticks))
+                 fees=Fees(commission_per_contract=a.commission, slippage_ticks=a.slippage_ticks,
+                           tick_size=a.tick_size))
     res = run(load_csv(a.csv), cfg, a.start, a.end)
 
     out = Path(a.out); out.mkdir(exist_ok=True)
@@ -204,7 +209,7 @@ def main():
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots(figsize=(11, 4))
         res["equity"].plot(ax=ax, lw=1.2)
-        ax.set_title("Golden cross 50/200 — gold 1h — equity (USD)"); ax.grid(alpha=.3)
+        ax.set_title(f"Golden cross 50/200 — 1h — {Path(a.csv).stem} — equity (USD)"); ax.grid(alpha=.3)
         fig.tight_layout(); fig.savefig(out / "equity.png", dpi=120)
     except ImportError:
         pass
